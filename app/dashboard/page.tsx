@@ -6,17 +6,17 @@ import { createSupabaseServerClient } from "@/lib/supabaseClient";
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient();
   const {
-    data: { session }
-  } = await supabase.auth.getSession();
+    data: { user }
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     redirect("/");
   }
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .single();
 
   if (!profile) {

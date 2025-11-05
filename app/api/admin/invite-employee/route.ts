@@ -6,17 +6,17 @@ import type { Database } from "@/lib/database.types";
 export async function POST(request: Request) {
   const supabase = createSupabaseServerClient();
   const {
-    data: { session }
-  } = await supabase.auth.getSession();
+    data: { user }
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     return NextResponse.json({ message: "No autorizado" }, { status: 401 });
   }
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .maybeSingle<Pick<Database["public"]["Tables"]["profiles"]["Row"], "role">>();
 
   if (!profile || profile.role !== "admin") {
