@@ -651,29 +651,6 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
                 </button>
               ))}
             </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-xl border border-slate-200/60 bg-slate-50/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Clientes totales</p>
-                <p className="mt-3 text-2xl font-semibold text-slate-900">{clients.length}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200/60 bg-slate-50/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Paellas registradas</p>
-                <p className="mt-3 text-2xl font-semibold text-slate-900">{totalPaellas}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200/60 bg-slate-50/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Paellas activas</p>
-                <p className="mt-3 text-2xl font-semibold text-slate-900">{activePaellas}</p>
-                <p className="text-xs text-slate-500">Pendientes o en cocina</p>
-              </div>
-              <div className="rounded-xl border border-slate-200/60 bg-slate-50/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Clientes pendientes</p>
-                <p className="mt-3 text-2xl font-semibold text-slate-900">{clientStatusCounts.pendiente ?? 0}</p>
-                <p className="text-xs text-slate-500">A la espera de devolución</p>
-              </div>
-            </div>
-            <div className="mt-4 rounded-xl border border-dashed border-slate-200/80 bg-white p-4 text-sm text-slate-500">
-              Paellas entregadas: {paellaStatusCounts.entregada ?? 0} · Devueltas: {paellaStatusCounts.devuelta ?? 0}
-            </div>
           </section>
 
           <section className="space-y-5">
