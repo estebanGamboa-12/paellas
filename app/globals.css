@@ -2,18 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background-color: #f9fafb;
-  color: #111827;
+/* Reduce sombras excesivas */
+.shadow,
+.shadow-sm,
+.shadow-md,
+.shadow-lg {
+  box-shadow: none !important;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/* Bordes suaves */
+.border {
+  border-color: rgba(0,0,0,0.08) !important;
 }
 
-button {
-  cursor: pointer;
+/* Cards minimalistas */
+.card {
+  background: white;
+  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid rgba(0,0,0,0.06);
 }
+

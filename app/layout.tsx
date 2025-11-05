@@ -14,19 +14,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-8">
           <header className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 className="text-3xl font-semibold text-slate-900">Paellas Express</h1>
+              <h1 className="text-3xl font-semibold text-slate-900"> Bon Vivant</h1>
               <p className="text-sm text-slate-600">
-                Panel de gestión para pedidos de paellas con Next.js y Supabase
+                Panel de gestión para pedidos de paellas 
               </p>
             </div>
-            <nav className="flex items-center gap-3 text-sm font-medium text-slate-600">
-              <a
-                href="/dashboard"
-                className="rounded-md border border-transparent px-3 py-2 transition hover:border-brand hover:text-brand"
-              >
-                Clientes
-              </a>
-            </nav>
+            
           </header>
           <main className="flex-1">{children}</main>
           <footer className="mt-12 text-center text-xs text-slate-500">
