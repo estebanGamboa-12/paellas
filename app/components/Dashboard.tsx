@@ -893,44 +893,6 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
                                       {paella.status}
                                     </span>
                                   </div>
-                                  <div className="flex flex-wrap gap-3 text-xs text-slate-600">
-                                    <span className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
-                                      <span>👥</span>
-                                      {paella.servings} comensales
-                                    </span>
-                                    <span className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
-                                      <span>💶</span>
-                                      Fianza {depositValue.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} €
-                                    </span>
-                                    <span className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
-                                      <span>🏷️</span>
-                                      {priceDisplay}
-                                    </span>
-                                  </div>
-                                  {parsed.notesText ? (
-                                    <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">{parsed.notesText}</p>
-                                  ) : null}
-                                  {isAdmin ? (
-                                    <div className="flex flex-wrap gap-2">
-                                      {(["pendiente", "cocinando", "lista", "entregada", "devuelta"] as const).map(
-                                        (statusOption) => (
-                                          <button
-                                            key={statusOption}
-                                            onClick={() => handleUpdatePaellaStatus(paella.id, statusOption)}
-                                            className={clsx(
-                                              "rounded-full px-3 py-1 text-xs capitalize transition",
-                                              PAELLA_STATUS_BADGE[statusOption],
-                                              paella.status === statusOption
-                                                ? "ring-2 ring-brand/60"
-                                                : "opacity-70 hover:opacity-100"
-                                            )}
-                                          >
-                                            {statusOption}
-                                          </button>
-                                        )
-                                      )}
-                                    </div>
-                                  ) : null}
                                 </div>
                               );
                             })}
