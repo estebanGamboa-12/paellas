@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
-import type { Database } from "@/lib/supabaseClient";
+import type { Database } from "@/lib/database.types";
 import clsx from "clsx";
 
 export type ClientWithPaellas = Database["public"]["Tables"]["clients"]["Row"] & {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
+import type { Database } from "@/lib/database.types";
 
 export async function POST(request: Request) {
   const supabase = createSupabaseServerClient();
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
     .from("profiles")
     .select("role")
     .eq("id", session.user.id)
-    .single();
+    .maybeSingle<Pick<Database["public"]["Tables"]["profiles"]["Row"], "role">>();
 
   if (!profile || profile.role !== "admin") {
     return NextResponse.json({ message: "Solo los administradores pueden invitar empleados" }, { status: 403 });
