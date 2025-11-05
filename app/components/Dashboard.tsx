@@ -41,6 +41,12 @@ const STATUS_BADGE: Record<string, string> = {
   devuelto: "bg-emerald-100 text-emerald-800"
 };
 
+const STATUS_FILTERS: { value: StatusFilter; label: string; icon: string }[] = [
+  { value: "pendiente", label: "Pendientes", icon: "⏳" },
+  { value: "devuelto", label: "Devueltas", icon: "✅" },
+  { value: "todos", label: "Todas", icon: "📋" }
+];
+
 const CLIENT_STATUS_LABELS: Record<string, string> = {
   pendiente: "Pendientes",
   entregado: "Entregados",
@@ -56,9 +62,9 @@ const PAELLA_STATUS_BADGE: Record<string, string> = {
 };
 
 const CARD_VARIANTS: Record<string, string> = {
-  pendiente: "border-rose-200 bg-rose-50",
-  devuelto: "border-emerald-200 bg-emerald-50",
-  entregado: "border-sky-200 bg-sky-50"
+  pendiente: "border-rose-200 ring-1 ring-rose-100/60",
+  devuelto: "border-emerald-200 ring-1 ring-emerald-100/60",
+  entregado: "border-sky-200 ring-1 ring-sky-100/60"
 };
 
 const DEFAULT_DEPOSIT = 10;
@@ -601,67 +607,78 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
 
       {activeSection === "clients" ? (
         <div className="space-y-6">
-          <section className="rounded-lg bg-white p-6 shadow">
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  <h3 className="text-lg font-semibold text-slate-800">Buscar clientes</h3>
+          <section className="rounded-2xl bg-white/90 p-6 shadow-sm ring-1 ring-slate-200/60">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-4">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand/10 text-2xl">
+                  📒
+                </span>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-brand">Panel de clientes</p>
+                  <h3 className="text-2xl font-semibold text-slate-900">Lista de Clientes</h3>
+                  <p className="text-sm text-slate-500">Busca, filtra y gestiona tus pedidos en un solo lugar.</p>
+                </div>
+              </div>
+              <div className="w-full max-w-sm">
+                <label className="relative block">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-slate-400">
+                    🔍
+                  </span>
                   <input
                     type="search"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Buscar por nombre completo o teléfono"
-                    className="w-full rounded-md border border-slate-200 px-3 py-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                    placeholder="Buscar por nombre o teléfono..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-sm text-slate-700 shadow-inner focus:border-brand focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
                   />
-                </div>
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-slate-700">Filtrar por estado</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {([
-                      { value: "pendiente", label: "Pendientes" },
-                      { value: "devuelto", label: "Devueltos" },
-                      { value: "todos", label: "Todos" }
-                    ] as const).map((option) => (
-                      <button
-                        key={option.value}
-                        onClick={() => setStatusFilter(option.value)}
-                        className={clsx(
-                          "rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition",
-                          statusFilter === option.value
-                            ? "bg-brand text-white shadow"
-                            : "border border-slate-200 text-slate-600 hover:border-brand hover:text-brand"
-                        )}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                </label>
               </div>
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-800">Estado de clientes</h3>
-                <dl className="grid gap-3 sm:grid-cols-3">
-                  {(["pendiente", "entregado", "devuelto"] as const).map((status) => (
-                    <div key={status} className="rounded-lg border border-slate-200 p-3">
-                      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        {CLIENT_STATUS_LABELS[status]}
-                      </dt>
-                      <dd className="mt-2 text-2xl font-semibold text-slate-800">
-                        {clientStatusCounts[status] ?? 0}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-                <div className="rounded-lg border border-dashed border-slate-200 p-3 text-sm text-slate-500">
-                  Paellas entregadas: {paellaStatusCounts.entregada ?? 0} · Devueltas: {paellaStatusCounts.devuelta ?? 0}
-                </div>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-2">
+              {STATUS_FILTERS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setStatusFilter(option.value)}
+                  className={clsx(
+                    "flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition",
+                    statusFilter === option.value
+                      ? "border-transparent bg-brand text-white shadow-lg shadow-brand/30"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-brand/40 hover:text-brand"
+                  )}
+                >
+                  <span className="text-base">{option.icon}</span>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl border border-slate-200/60 bg-slate-50/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Clientes totales</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-900">{clients.length}</p>
               </div>
+              <div className="rounded-xl border border-slate-200/60 bg-slate-50/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Paellas registradas</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-900">{totalPaellas}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200/60 bg-slate-50/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Paellas activas</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-900">{activePaellas}</p>
+                <p className="text-xs text-slate-500">Pendientes o en cocina</p>
+              </div>
+              <div className="rounded-xl border border-slate-200/60 bg-slate-50/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Clientes pendientes</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-900">{clientStatusCounts.pendiente ?? 0}</p>
+                <p className="text-xs text-slate-500">A la espera de devolución</p>
+              </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200/80 bg-white p-4 text-sm text-slate-500">
+              Paellas entregadas: {paellaStatusCounts.entregada ?? 0} · Devueltas: {paellaStatusCounts.devuelta ?? 0}
             </div>
           </section>
 
-          <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-800">Listado de clientes</h3>
+          <section className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h4 className="text-base font-semibold text-slate-700">Clientes encontrados</h4>
               <p className="text-xs text-slate-500">
                 Mostrando {filteredClients.length} cliente{filteredClients.length === 1 ? "" : "s"}
               </p>
@@ -669,18 +686,46 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
             <div className="space-y-4">
               {filteredClients.map((client) => {
                 const cardClasses = clsx(
-                  "rounded-lg border bg-white p-6 shadow transition",
-                  CARD_VARIANTS[client.status] ?? "border-slate-200"
+                  "rounded-2xl border bg-white/95 p-6 shadow-md transition hover:-translate-y-0.5 hover:shadow-lg",
+                  CARD_VARIANTS[client.status] ?? "border-slate-200/80"
                 );
+                const paellaDetails = client.paellas.map((paella) => {
+                  const parsed = parsePaellaNotes(paella.notes);
+                  return {
+                    paella,
+                    parsed,
+                    depositValue: parsed.deposit !== null ? parsed.deposit : DEFAULT_DEPOSIT
+                  };
+                });
+                const totalDeposit = paellaDetails.reduce((sum, item) => sum + item.depositValue, 0);
+                const statusLabel = CLIENT_STATUS_LABELS[client.status] ?? client.status;
 
                 return (
                   <article key={client.id} className={cardClasses}>
-                    <header className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h4 className="text-lg font-semibold text-slate-800">
-                          {client.first_name} {client.last_name}
-                        </h4>
-                        <p className="text-sm text-slate-600">{client.phone ?? "Sin teléfono"}</p>
+                    <header className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-lg font-semibold text-slate-900">
+                            {client.first_name} {client.last_name}
+                          </h4>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                            #{client.id.slice(0, 6)}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+                          <span className="flex items-center gap-1">
+                            <span>📞</span>
+                            {client.phone ?? "Sin teléfono"}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span>📅</span>
+                            {new Date(client.created_at).toLocaleDateString("es-ES", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric"
+                            })}
+                          </span>
+                        </div>
                       </div>
                       <div className="flex flex-col items-end gap-2 text-right">
                         <span
@@ -689,7 +734,7 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
                             STATUS_BADGE[client.status] ?? STATUS_BADGE.pendiente
                           )}
                         >
-                          {client.status}
+                          {statusLabel}
                         </span>
                         <span className="text-[11px] uppercase tracking-wider text-slate-500">
                           Creado el {new Date(client.created_at).toLocaleDateString("es-ES")}
@@ -903,103 +948,147 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-4 space-y-2 text-sm text-slate-600">
-                        {client.paellas.length === 0 ? (
-                          <p>No hay paellas registradas todavía.</p>
+                      <div className="mt-5 space-y-4">
+                        {paellaDetails.length === 0 ? (
+                          <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                            No hay paellas registradas todavía.
+                          </p>
                         ) : (
-                          client.paellas.map((paella) => {
-                            const parsed = parsePaellaNotes(paella.notes);
-                            const depositDisplay =
-                              parsed.deposit !== null ? parsed.deposit : DEFAULT_DEPOSIT;
-                            const priceDisplay =
-                              parsed.price !== null
-                                ? `${parsed.price.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
-                                : "Sin precio asignado";
-                            return (
-                              <div
-                                key={paella.id}
-                                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-100 p-3"
-                              >
-                                <div className="space-y-1">
-                                  <p className="font-medium text-slate-800">
-                                    {paella.servings} raciones · {paella.rice_type ?? "Mixta"}
-                                  </p>
-                                  <p className="text-xs text-slate-500">
-                                    Estado: {paella.status} · Fianza: {depositDisplay} € · {priceDisplay}
-                                  </p>
-                                  <p className="text-xs text-slate-500">
-                                    {parsed.notesText ? parsed.notesText : "Sin notas"}
-                                  </p>
-                                </div>
-                                {isAdmin ? (
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    {(["pendiente", "cocinando", "lista", "entregada", "devuelta"] as const).map(
-                                      (statusOption) => (
-                                        <button
-                                          key={statusOption}
-                                          onClick={() => handleUpdatePaellaStatus(paella.id, statusOption)}
-                                          className={clsx(
-                                            "rounded-full px-3 py-1 text-xs capitalize transition",
-                                            PAELLA_STATUS_BADGE[statusOption],
-                                            paella.status === statusOption
-                                              ? "ring-2 ring-brand/60"
-                                              : "opacity-70 hover:opacity-100"
-                                          )}
-                                        >
-                                          {statusOption}
-                                        </button>
-                                      )
-                                    )}
+                          <div className="space-y-3">
+                            {paellaDetails.map(({ paella, parsed, depositValue }) => {
+                              const priceDisplay =
+                                parsed.price !== null
+                                  ? `${parsed.price.toLocaleString("es-ES", {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2
+                                    })} €`
+                                  : "Sin precio asignado";
+
+                              return (
+                                <div
+                                  key={paella.id}
+                                  className="space-y-3 rounded-xl border border-slate-200/70 bg-white/80 p-4 shadow-sm"
+                                >
+                                  <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 text-slate-700">
+                                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand/10 text-lg">
+                                        🍽️
+                                      </span>
+                                      <div>
+                                        <p className="text-sm font-semibold text-slate-900">
+                                          {paella.servings} persona{paella.servings === 1 ? "" : "s"}
+                                        </p>
+                                        <p className="text-xs text-slate-500">{paella.rice_type ?? "Mixta"}</p>
+                                      </div>
+                                    </div>
+                                    <span
+                                      className={clsx(
+                                        "rounded-full px-3 py-1 text-xs capitalize",
+                                        PAELLA_STATUS_BADGE[paella.status]
+                                      )}
+                                    >
+                                      {paella.status}
+                                    </span>
                                   </div>
-                                ) : (
-                                  <span
-                                    className={clsx(
-                                      "rounded-full px-3 py-1 text-xs capitalize",
-                                      PAELLA_STATUS_BADGE[paella.status]
-                                    )}
-                                  >
-                                    {paella.status}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })
+                                  <div className="flex flex-wrap gap-3 text-xs text-slate-600">
+                                    <span className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
+                                      <span>👥</span>
+                                      {paella.servings} comensales
+                                    </span>
+                                    <span className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
+                                      <span>💶</span>
+                                      Fianza {depositValue.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} €
+                                    </span>
+                                    <span className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
+                                      <span>🏷️</span>
+                                      {priceDisplay}
+                                    </span>
+                                  </div>
+                                  {parsed.notesText ? (
+                                    <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">{parsed.notesText}</p>
+                                  ) : null}
+                                  {isAdmin ? (
+                                    <div className="flex flex-wrap gap-2">
+                                      {(["pendiente", "cocinando", "lista", "entregada", "devuelta"] as const).map(
+                                        (statusOption) => (
+                                          <button
+                                            key={statusOption}
+                                            onClick={() => handleUpdatePaellaStatus(paella.id, statusOption)}
+                                            className={clsx(
+                                              "rounded-full px-3 py-1 text-xs capitalize transition",
+                                              PAELLA_STATUS_BADGE[statusOption],
+                                              paella.status === statusOption
+                                                ? "ring-2 ring-brand/60"
+                                                : "opacity-70 hover:opacity-100"
+                                            )}
+                                          >
+                                            {statusOption}
+                                          </button>
+                                        )
+                                      )}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
+
+                        <div className="rounded-xl border border-slate-200/70 bg-slate-50/80 p-4 text-sm text-slate-600">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-2 font-medium text-slate-700">
+                              <span>💰</span>
+                              Total fianzas
+                            </span>
+                            <span className="text-base font-semibold text-slate-900">
+                              {totalDeposit.toLocaleString("es-ES", {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0
+                              })}
+                               €
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     )}
 
-                    <footer className="mt-4 space-y-3">
+                    <footer className="mt-6 space-y-4">
                       {isAdmin ? (
-                        <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
                           <button
                             onClick={() => handleUpdateClientStatus(client.id, "devuelto")}
-                            className="rounded-md border border-rose-300 px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                            className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/70 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm hover:bg-emerald-100"
                           >
-                            Devuelto
+                            <span>✅</span>
+                            Marcar devuelta
                           </button>
                           <button
                             onClick={() => handleUpdateClientStatus(client.id, "entregado")}
-                            className="rounded-md border border-emerald-300 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                            className="flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50/70 px-3 py-1.5 text-xs font-semibold text-sky-700 shadow-sm hover:bg-sky-100"
                           >
+                            <span>🎟️</span>
                             Ticket
                           </button>
                           <button
                             onClick={() => startEditingClient(client)}
-                            className="rounded-md border border-sky-300 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50"
+                            className="flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand shadow-sm hover:bg-brand/20"
                           >
+                            <span>✏️</span>
                             Editar
                           </button>
                           <button
                             onClick={() => handleDeleteClient(client.id)}
-                            className="rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                            className="flex items-center gap-2 rounded-full border border-red-300 bg-red-50/70 px-3 py-1.5 text-xs font-semibold text-red-700 shadow-sm hover:bg-red-100"
                           >
+                            <span>🗑️</span>
                             Eliminar
                           </button>
                           {client.status !== "pendiente" ? (
                             <button
                               onClick={() => handleUpdateClientStatus(client.id, "pendiente")}
-                              className="rounded-md border border-amber-300 px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50"
+                              className="flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50/70 px-3 py-1.5 text-xs font-semibold text-amber-700 shadow-sm hover:bg-amber-100"
                             >
+                              <span>↩️</span>
                               Volver a pendiente
                             </button>
                           ) : null}
