@@ -36,7 +36,7 @@ type ParsedPaellaNotes = {
 type SectionKey = "overview" | "clients" | "create" | "invite";
 
 const STATUS_BADGE: Record<string, string> = {
-  pendiente: "bg-rose-100 text-rose-800",
+  pendiente: "bg-amber-100 text-amber-800",
   entregado: "bg-sky-100 text-sky-800",
   devuelto: "bg-emerald-100 text-emerald-800"
 };
@@ -62,7 +62,7 @@ const PAELLA_STATUS_BADGE: Record<string, string> = {
 };
 
 const CARD_VARIANTS: Record<string, string> = {
-  pendiente: "border-rose-200 ring-1 ring-rose-100/60",
+  pendiente: "border-amber-200 ring-1 ring-amber-100/60",
   devuelto: "border-emerald-200 ring-1 ring-emerald-100/60",
   entregado: "border-sky-200 ring-1 ring-sky-100/60"
 };
@@ -150,16 +150,6 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
   const [editPaellasState, setEditPaellasState] = useState<Record<string, PaellaEditState>>({});
   const [editingError, setEditingError] = useState<string | null>(null);
   const [savingClient, setSavingClient] = useState(false);
-  const [addingPaellaForClient, setAddingPaellaForClient] = useState<string | null>(null);
-  const [addPaellaState, setAddPaellaState] = useState({
-    servings: 2,
-    rice_type: "Mixta",
-    notes: "",
-    deposit: String(DEFAULT_DEPOSIT),
-    price: ""
-  });
-  const [addPaellaError, setAddPaellaError] = useState<string | null>(null);
-  const [addingPaella, setAddingPaella] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionKey>("overview");
 
   const isAdmin = profile.role === "admin";
@@ -477,70 +467,6 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
 
     setSavingClient(false);
     cancelEditingClient();
-  };
-
-  const openAddPaellaForm = (clientId: string) => {
-    setAddingPaellaForClient(clientId);
-    setAddPaellaState({
-      servings: 2,
-      rice_type: "Mixta",
-      notes: "",
-      deposit: String(DEFAULT_DEPOSIT),
-      price: ""
-    });
-    setAddPaellaError(null);
-  };
-
-  const handleAddPaella = async (event: React.FormEvent<HTMLFormElement>, client: ClientWithPaellas) => {
-    event.preventDefault();
-    if (addingPaella) return;
-
-    if (addPaellaState.servings < 2) {
-      setAddPaellaError("La paella debe ser para al menos 2 personas.");
-      return;
-    }
-
-    const depositValue = addPaellaState.deposit ? Number(addPaellaState.deposit) : DEFAULT_DEPOSIT;
-    const priceValue = addPaellaState.price ? Number(addPaellaState.price) : null;
-
-    if (Number.isNaN(depositValue) || (priceValue !== null && Number.isNaN(priceValue))) {
-      setAddPaellaError("Importes inválidos para la nueva paella.");
-      return;
-    }
-
-    setAddingPaella(true);
-    setAddPaellaError(null);
-
-    const { data, error } = await supabase
-      .from("paellas")
-      .insert({
-        client_id: client.id,
-        servings: addPaellaState.servings,
-        rice_type: addPaellaState.rice_type,
-        status: "pendiente",
-        notes: buildPaellaNotesPayload({
-          notes: addPaellaState.notes,
-          deposit: depositValue,
-          price: priceValue
-        })
-      })
-      .select()
-      .single();
-
-    if (error || !data) {
-      setAddPaellaError(error?.message ?? "No se pudo añadir la paella.");
-      setAddingPaella(false);
-      return;
-    }
-
-    setClients((current) =>
-      current.map((item) =>
-        item.id === client.id ? { ...item, paellas: [...item.paellas, data] } : item
-      )
-    );
-
-    setAddingPaella(false);
-    setAddingPaellaForClient(null);
   };
 
   return (
@@ -1076,103 +1002,7 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
                         </p>
                       )}
 
-                      {addingPaellaForClient === client.id ? (
-                        <form
-                          onSubmit={(event) => handleAddPaella(event, client)}
-                          className="space-y-3 rounded-md border border-dashed border-slate-300 p-3"
-                        >
-                          <h5 className="text-sm font-semibold text-slate-700">Añadir nueva paella</h5>
-                          <div className="grid gap-3 md:grid-cols-3">
-                            <label className="space-y-1">
-                              <span className="text-xs font-semibold uppercase text-slate-600">Raciones</span>
-                              <input
-                                type="number"
-                                min={2}
-                                value={addPaellaState.servings}
-                                onChange={(event) =>
-                                  setAddPaellaState((prev) => ({ ...prev, servings: Number(event.target.value) }))
-                                }
-                                className="w-full rounded-md border border-slate-200 px-3 py-2"
-                              />
-                            </label>
-                            <label className="space-y-1">
-                              <span className="text-xs font-semibold uppercase text-slate-600">Tipo</span>
-                              <select
-                                value={addPaellaState.rice_type}
-                                onChange={(event) =>
-                                  setAddPaellaState((prev) => ({ ...prev, rice_type: event.target.value }))
-                                }
-                                className="w-full rounded-md border border-slate-200 px-3 py-2"
-                              >
-                                <option>Mixta</option>
-                                <option>Marisco</option>
-                                <option>Carne</option>
-                                <option>Vegetal</option>
-                              </select>
-                            </label>
-                            <label className="space-y-1">
-                              <span className="text-xs font-semibold uppercase text-slate-600">Fianza (€)</span>
-                              <input
-                                type="number"
-                                min={0}
-                                value={addPaellaState.deposit}
-                                onChange={(event) =>
-                                  setAddPaellaState((prev) => ({ ...prev, deposit: event.target.value }))
-                                }
-                                className="w-full rounded-md border border-slate-200 px-3 py-2"
-                              />
-                            </label>
-                            <label className="space-y-1">
-                              <span className="text-xs font-semibold uppercase text-slate-600">Precio (€)</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={addPaellaState.price}
-                                onChange={(event) =>
-                                  setAddPaellaState((prev) => ({ ...prev, price: event.target.value }))
-                                }
-                                className="w-full rounded-md border border-slate-200 px-3 py-2"
-                              />
-                            </label>
-                            <label className="md:col-span-3 space-y-1">
-                              <span className="text-xs font-semibold uppercase text-slate-600">Notas</span>
-                              <textarea
-                                value={addPaellaState.notes}
-                                onChange={(event) =>
-                                  setAddPaellaState((prev) => ({ ...prev, notes: event.target.value }))
-                                }
-                                className="w-full rounded-md border border-slate-200 px-3 py-2"
-                                rows={2}
-                              />
-                            </label>
-                          </div>
-                          {addPaellaError ? <p className="text-sm text-red-600">{addPaellaError}</p> : null}
-                          <div className="flex flex-wrap gap-3">
-                            <button
-                              type="submit"
-                              disabled={addingPaella}
-                              className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
-                            >
-                              {addingPaella ? "Guardando..." : "Guardar paella"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setAddingPaellaForClient(null)}
-                              className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </form>
-                      ) : (
-                        <button
-                          onClick={() => openAddPaellaForm(client.id)}
-                          className="flex items-center gap-2 text-sm font-medium text-brand hover:underline"
-                        >
-                          + Añadir otra paella
-                        </button>
-                      )}
+                      <p className="text-xs text-slate-400">Gestión de paellas adicionales disponible desde el formulario de creación.</p>
                     </footer>
                   </article>
                 );
