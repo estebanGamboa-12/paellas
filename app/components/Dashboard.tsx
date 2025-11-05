@@ -17,10 +17,26 @@ type DashboardProps = {
   initialClients: ClientWithPaellas[];
 };
 
+type StatusFilter = "todos" | "pendiente" | "devuelto";
+
+type PaellaEditState = {
+  servings: number;
+  rice_type: string | null;
+  notes: string;
+  deposit: string;
+  price: string;
+};
+
+type ParsedPaellaNotes = {
+  notesText: string;
+  deposit: number | null;
+  price: number | null;
+};
+
 const STATUS_BADGE: Record<string, string> = {
-  pendiente: "bg-yellow-100 text-yellow-800",
-  entregado: "bg-green-100 text-green-800",
-  devuelto: "bg-red-100 text-red-800"
+  pendiente: "bg-rose-100 text-rose-800",
+  entregado: "bg-sky-100 text-sky-800",
+  devuelto: "bg-emerald-100 text-emerald-800"
 };
 
 const PAELLA_STATUS_BADGE: Record<string, string> = {
@@ -31,11 +47,73 @@ const PAELLA_STATUS_BADGE: Record<string, string> = {
   devuelta: "bg-rose-100 text-rose-800"
 };
 
+const CARD_VARIANTS: Record<string, string> = {
+  pendiente: "border-rose-200 bg-rose-50",
+  devuelto: "border-emerald-200 bg-emerald-50",
+  entregado: "border-sky-200 bg-sky-50"
+};
+
+const DEFAULT_DEPOSIT = 10;
+
+function parsePaellaNotes(notes: string | null): ParsedPaellaNotes {
+  if (!notes) {
+    return { notesText: "", deposit: null, price: null };
+  }
+
+  try {
+    const parsed = JSON.parse(notes);
+    const rawDeposit = parsed.deposit;
+    const rawPrice = parsed.price;
+
+    return {
+      notesText: typeof parsed.notes === "string" ? parsed.notes : "",
+      deposit:
+        typeof rawDeposit === "number"
+          ? rawDeposit
+          : rawDeposit !== undefined && rawDeposit !== null && !Number.isNaN(Number(rawDeposit))
+          ? Number(rawDeposit)
+          : null,
+      price:
+        typeof rawPrice === "number"
+          ? rawPrice
+          : rawPrice !== undefined && rawPrice !== null && !Number.isNaN(Number(rawPrice))
+          ? Number(rawPrice)
+          : null
+    };
+  } catch (error) {
+    const depositMatch = notes.match(/fianza[:\s]*([0-9.,]+)/i);
+    const priceMatch = notes.match(/precio[:\s]*([0-9.,]+)/i);
+
+    return {
+      notesText: notes,
+      deposit: depositMatch ? Number(depositMatch[1].replace(",", ".")) : null,
+      price: priceMatch ? Number(priceMatch[1].replace(",", ".")) : null
+    };
+  }
+}
+
+function buildPaellaNotesPayload({
+  notes,
+  deposit,
+  price
+}: {
+  notes: string;
+  deposit: number | null;
+  price: number | null;
+}) {
+  return JSON.stringify({
+    notes,
+    deposit,
+    price
+  });
+}
+
 export function Dashboard({ profile, initialClients }: DashboardProps) {
   const supabase = useSupabaseClient<Database>();
   const router = useRouter();
   const [clients, setClients] = useState(initialClients);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formState, setFormState] = useState({
@@ -44,20 +122,46 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
     phone: "",
     servings: 2,
     rice_type: "Mixta",
+    notes: "",
+    deposit: DEFAULT_DEPOSIT,
+    price: ""
+  });
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
+  const [editFormState, setEditFormState] = useState({
+    first_name: "",
+    last_name: "",
+    phone: "",
     notes: ""
   });
+  const [editPaellasState, setEditPaellasState] = useState<Record<string, PaellaEditState>>({});
+  const [editingError, setEditingError] = useState<string | null>(null);
+  const [savingClient, setSavingClient] = useState(false);
+  const [addingPaellaForClient, setAddingPaellaForClient] = useState<string | null>(null);
+  const [addPaellaState, setAddPaellaState] = useState({
+    servings: 2,
+    rice_type: "Mixta",
+    notes: "",
+    deposit: String(DEFAULT_DEPOSIT),
+    price: ""
+  });
+  const [addPaellaError, setAddPaellaError] = useState<string | null>(null);
+  const [addingPaella, setAddingPaella] = useState(false);
 
   const isAdmin = profile.role === "admin";
 
   const filteredClients = useMemo(() => {
-    if (!search) return clients;
-    const normalized = search.toLowerCase();
+    const normalized = search.toLowerCase().trim();
+
     return clients.filter((client) => {
       const fullName = `${client.first_name} ${client.last_name}`.toLowerCase();
       const phone = client.phone?.toLowerCase() ?? "";
-      return fullName.includes(normalized) || phone.includes(normalized);
+      const matchesSearch = !normalized || fullName.includes(normalized) || phone.includes(normalized);
+      const matchesFilter =
+        statusFilter === "todos" ? true : client.status === statusFilter;
+
+      return matchesSearch && matchesFilter;
     });
-  }, [clients, search]);
+  }, [clients, search, statusFilter]);
 
   const resetForm = () => {
     setFormState({
@@ -66,7 +170,9 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
       phone: "",
       servings: 2,
       rice_type: "Mixta",
-      notes: ""
+      notes: "",
+      deposit: DEFAULT_DEPOSIT,
+      price: ""
     });
     setFormError(null);
   };
@@ -78,6 +184,9 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
       setFormError("La paella debe ser para al menos 2 personas.");
       return;
     }
+
+    const depositValue = Number(formState.deposit) || DEFAULT_DEPOSIT;
+    const priceValue = formState.price ? Number(formState.price) : null;
 
     setCreating(true);
     setFormError(null);
@@ -107,7 +216,11 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
         servings: formState.servings,
         rice_type: formState.rice_type,
         status: "pendiente",
-        notes: formState.notes || null
+        notes: buildPaellaNotesPayload({
+          notes: formState.notes,
+          deposit: depositValue,
+          price: priceValue
+        })
       })
       .select()
       .single();
@@ -205,9 +318,176 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
     event.currentTarget.reset();
   };
 
+  const startEditingClient = (client: ClientWithPaellas) => {
+    if (!isAdmin) return;
+    setEditingClientId(client.id);
+    setEditingError(null);
+    setEditFormState({
+      first_name: client.first_name,
+      last_name: client.last_name,
+      phone: client.phone ?? "",
+      notes: client.notes ?? ""
+    });
+
+    const paellaState: Record<string, PaellaEditState> = {};
+    client.paellas.forEach((paella) => {
+      const parsed = parsePaellaNotes(paella.notes);
+      paellaState[paella.id] = {
+        servings: paella.servings,
+        rice_type: paella.rice_type,
+        notes: parsed.notesText,
+        deposit: parsed.deposit !== null ? String(parsed.deposit) : "",
+        price: parsed.price !== null ? String(parsed.price) : ""
+      };
+    });
+    setEditPaellasState(paellaState);
+  };
+
+  const cancelEditingClient = () => {
+    setEditingClientId(null);
+    setEditingError(null);
+    setSavingClient(false);
+    setEditPaellasState({});
+  };
+
+  const handleSaveClient = async (client: ClientWithPaellas) => {
+    if (!isAdmin) return;
+
+    const paellaStates = editPaellasState;
+    const hasInvalidDeposit = Object.values(paellaStates).some((state) => {
+      if (!state.deposit) return false;
+      return Number.isNaN(Number(state.deposit));
+    });
+    const hasInvalidPrice = Object.values(paellaStates).some((state) => {
+      if (!state.price) return false;
+      return Number.isNaN(Number(state.price));
+    });
+
+    if (hasInvalidDeposit || hasInvalidPrice) {
+      setEditingError("Revisa los importes introducidos para fianza o precio.");
+      return;
+    }
+
+    setSavingClient(true);
+    setEditingError(null);
+
+    const { error: clientError } = await supabase
+      .from("clients")
+      .update({
+        first_name: editFormState.first_name,
+        last_name: editFormState.last_name,
+        phone: editFormState.phone || null,
+        notes: editFormState.notes || null
+      })
+      .eq("id", client.id);
+
+    if (clientError) {
+      setEditingError(clientError.message ?? "No se pudo actualizar el cliente.");
+      setSavingClient(false);
+      return;
+    }
+
+    for (const paella of client.paellas) {
+      const state = paellaStates[paella.id];
+      if (!state) continue;
+
+      await supabase
+        .from("paellas")
+        .update({
+          servings: state.servings,
+          rice_type: state.rice_type,
+          notes: buildPaellaNotesPayload({
+            notes: state.notes,
+            deposit: state.deposit ? Number(state.deposit) : null,
+            price: state.price ? Number(state.price) : null
+          })
+        })
+        .eq("id", paella.id);
+    }
+
+    const { data: refreshed } = await supabase
+      .from("clients")
+      .select("*, paellas(*)")
+      .eq("id", client.id)
+      .single();
+
+    if (refreshed) {
+      setClients((current) =>
+        current.map((item) => (item.id === client.id ? (refreshed as ClientWithPaellas) : item))
+      );
+    }
+
+    setSavingClient(false);
+    cancelEditingClient();
+  };
+
+  const openAddPaellaForm = (clientId: string) => {
+    setAddingPaellaForClient(clientId);
+    setAddPaellaState({
+      servings: 2,
+      rice_type: "Mixta",
+      notes: "",
+      deposit: String(DEFAULT_DEPOSIT),
+      price: ""
+    });
+    setAddPaellaError(null);
+  };
+
+  const handleAddPaella = async (event: React.FormEvent<HTMLFormElement>, client: ClientWithPaellas) => {
+    event.preventDefault();
+    if (addingPaella) return;
+
+    if (addPaellaState.servings < 2) {
+      setAddPaellaError("La paella debe ser para al menos 2 personas.");
+      return;
+    }
+
+    const depositValue = addPaellaState.deposit ? Number(addPaellaState.deposit) : DEFAULT_DEPOSIT;
+    const priceValue = addPaellaState.price ? Number(addPaellaState.price) : null;
+
+    if (Number.isNaN(depositValue) || (priceValue !== null && Number.isNaN(priceValue))) {
+      setAddPaellaError("Importes inválidos para la nueva paella.");
+      return;
+    }
+
+    setAddingPaella(true);
+    setAddPaellaError(null);
+
+    const { data, error } = await supabase
+      .from("paellas")
+      .insert({
+        client_id: client.id,
+        servings: addPaellaState.servings,
+        rice_type: addPaellaState.rice_type,
+        status: "pendiente",
+        notes: buildPaellaNotesPayload({
+          notes: addPaellaState.notes,
+          deposit: depositValue,
+          price: priceValue
+        })
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      setAddPaellaError(error?.message ?? "No se pudo añadir la paella.");
+      setAddingPaella(false);
+      return;
+    }
+
+    setClients((current) =>
+      current.map((item) =>
+        item.id === client.id ? { ...item, paellas: [...item.paellas, data] } : item
+      )
+    );
+
+    setAddingPaella(false);
+    setAddingPaellaForClient(null);
+  };
+
   return (
     <div className="space-y-8">
-      <section className="flex items-center justify-between">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-slate-800">Panel principal</h2>
           <p className="text-sm text-slate-600">
@@ -216,22 +496,47 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
         </div>
         <button
           onClick={handleSignOut}
-          className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+          className="self-start rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
         >
           Cerrar sesión
         </button>
       </section>
 
       <section className="grid gap-6 rounded-lg bg-white p-6 shadow lg:grid-cols-2">
-        <div className="space-y-3">
-          <h3 className="text-lg font-semibold text-slate-800">Buscar clientes</h3>
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar por nombre completo o teléfono"
-            className="w-full rounded-md border border-slate-200 px-3 py-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
-          />
+        <div className="space-y-4">
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold text-slate-800">Buscar clientes</h3>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar por nombre completo o teléfono"
+              className="w-full rounded-md border border-slate-200 px-3 py-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+            />
+          </div>
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold text-slate-700">Filtrar por estado</h4>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { value: "pendiente", label: "Pendientes" },
+                { value: "devuelto", label: "Devueltos" },
+                { value: "todos", label: "Todos" }
+              ] as const).map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setStatusFilter(option.value)}
+                  className={clsx(
+                    "rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition",
+                    statusFilter === option.value
+                      ? "bg-brand text-white shadow"
+                      : "border border-slate-200 text-slate-600 hover:border-brand hover:text-brand"
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="space-y-3">
           <h3 className="text-lg font-semibold text-slate-800">Nuevo cliente y paella</h3>
@@ -291,6 +596,32 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
                 <option>Carne</option>
                 <option>Vegetal</option>
               </select>
+            </div>
+            <div className="md:col-span-1">
+              <label className="block text-sm font-medium text-slate-700">Fianza (€)</label>
+              <input
+                type="number"
+                min={0}
+                value={formState.deposit}
+                onChange={(event) =>
+                  setFormState((prev) => ({ ...prev, deposit: Number(event.target.value) }))
+                }
+                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2"
+              />
+            </div>
+            <div className="md:col-span-1">
+              <label className="block text-sm font-medium text-slate-700">Precio (€)</label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={formState.price}
+                onChange={(event) =>
+                  setFormState((prev) => ({ ...prev, price: event.target.value }))
+                }
+                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2"
+                placeholder="Precio final"
+              />
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700">Notas</label>
@@ -362,113 +693,457 @@ export function Dashboard({ profile, initialClients }: DashboardProps) {
       ) : null}
 
       <section className="space-y-4">
-        <h3 className="text-lg font-semibold text-slate-800">Listado de clientes</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-800">Listado de clientes</h3>
+          <p className="text-xs text-slate-500">
+            Mostrando {filteredClients.length} cliente{filteredClients.length === 1 ? "" : "s"}
+          </p>
+        </div>
         <div className="space-y-4">
-          {filteredClients.map((client) => (
-            <article key={client.id} className="rounded-lg bg-white p-6 shadow">
-              <header className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h4 className="text-lg font-semibold text-slate-800">
-                    {client.first_name} {client.last_name}
-                  </h4>
-                  <p className="text-sm text-slate-600">{client.phone ?? "Sin teléfono"}</p>
-                </div>
-                <span
-                  className={clsx(
-                    "rounded-full px-3 py-1 text-xs font-medium uppercase tracking-wide",
-                    STATUS_BADGE[client.status] ?? STATUS_BADGE.pendiente
-                  )}
-                >
-                  {client.status}
-                </span>
-              </header>
-              <div className="mt-4 space-y-2 text-sm text-slate-600">
-                {client.paellas.length === 0 ? (
-                  <p>No hay paellas registradas todavía.</p>
-                ) : (
-                  client.paellas.map((paella) => (
-                    <div
-                      key={paella.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-100 p-3"
+          {filteredClients.map((client) => {
+            const cardClasses = clsx(
+              "rounded-lg border bg-white p-6 shadow transition",
+              CARD_VARIANTS[client.status] ?? "border-slate-200"
+            );
+
+            return (
+              <article key={client.id} className={cardClasses}>
+                <header className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-lg font-semibold text-slate-800">
+                      {client.first_name} {client.last_name}
+                    </h4>
+                    <p className="text-sm text-slate-600">{client.phone ?? "Sin teléfono"}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-2 text-right">
+                    <span
+                      className={clsx(
+                        "rounded-full px-3 py-1 text-xs font-medium uppercase tracking-wide",
+                        STATUS_BADGE[client.status] ?? STATUS_BADGE.pendiente
+                      )}
                     >
-                      <div>
-                        <p className="font-medium text-slate-800">
-                          {paella.servings} raciones · {paella.rice_type ?? "Mixta"}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          Estado: {paella.status} · {paella.notes ?? "Sin notas"}
-                        </p>
-                      </div>
-                      {isAdmin ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          {(["pendiente", "cocinando", "lista", "entregada", "devuelta"] as const).map(
-                            (statusOption) => (
-                              <button
-                                key={statusOption}
-                                onClick={() => handleUpdatePaellaStatus(paella.id, statusOption)}
+                      {client.status}
+                    </span>
+                    <span className="text-[11px] uppercase tracking-wider text-slate-500">
+                      Creado el {new Date(client.created_at).toLocaleDateString("es-ES")}
+                    </span>
+                  </div>
+                </header>
+
+                {editingClientId === client.id ? (
+                  <div className="mt-4 space-y-4 border-t border-slate-200 pt-4">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="space-y-1">
+                        <span className="text-xs font-semibold uppercase text-slate-600">Nombre</span>
+                        <input
+                          value={editFormState.first_name}
+                          onChange={(event) =>
+                            setEditFormState((prev) => ({ ...prev, first_name: event.target.value }))
+                          }
+                          className="w-full rounded-md border border-slate-200 px-3 py-2"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-xs font-semibold uppercase text-slate-600">Apellido</span>
+                        <input
+                          value={editFormState.last_name}
+                          onChange={(event) =>
+                            setEditFormState((prev) => ({ ...prev, last_name: event.target.value }))
+                          }
+                          className="w-full rounded-md border border-slate-200 px-3 py-2"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-xs font-semibold uppercase text-slate-600">Teléfono</span>
+                        <input
+                          value={editFormState.phone}
+                          onChange={(event) =>
+                            setEditFormState((prev) => ({ ...prev, phone: event.target.value }))
+                          }
+                          className="w-full rounded-md border border-slate-200 px-3 py-2"
+                        />
+                      </label>
+                      <label className="md:col-span-2 space-y-1">
+                        <span className="text-xs font-semibold uppercase text-slate-600">Notas generales</span>
+                        <textarea
+                          value={editFormState.notes}
+                          onChange={(event) =>
+                            setEditFormState((prev) => ({ ...prev, notes: event.target.value }))
+                          }
+                          className="w-full rounded-md border border-slate-200 px-3 py-2"
+                          rows={2}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h5 className="text-sm font-semibold text-slate-700">Paellas de este cliente</h5>
+                      {client.paellas.map((paella) => {
+                        const storedState = editPaellasState[paella.id];
+                        const initialState = () => {
+                          const parsedDetails = parsePaellaNotes(paella.notes);
+                          return {
+                            servings: paella.servings,
+                            rice_type: paella.rice_type,
+                            notes: parsedDetails.notesText,
+                            deposit: parsedDetails.deposit !== null ? String(parsedDetails.deposit) : "",
+                            price: parsedDetails.price !== null ? String(parsedDetails.price) : ""
+                          } satisfies PaellaEditState;
+                        };
+                        const currentState = storedState ?? initialState();
+
+                        return (
+                          <div key={paella.id} className="rounded-md border border-slate-200 p-3">
+                            <div className="grid gap-3 md:grid-cols-3">
+                              <label className="space-y-1">
+                                <span className="text-xs font-semibold uppercase text-slate-600">Raciones</span>
+                                <input
+                                  type="number"
+                                  min={2}
+                                  value={currentState.servings}
+                                  onChange={(event) =>
+                                    setEditPaellasState((prev) => {
+                                      const base = prev[paella.id] ?? initialState();
+                                      return {
+                                        ...prev,
+                                        [paella.id]: {
+                                          ...base,
+                                          servings: Number(event.target.value)
+                                        }
+                                      };
+                                    })
+                                  }
+                                  className="w-full rounded-md border border-slate-200 px-3 py-2"
+                                />
+                              </label>
+                              <label className="space-y-1">
+                                <span className="text-xs font-semibold uppercase text-slate-600">Tipo de arroz</span>
+                                <select
+                                  value={currentState.rice_type ?? "Mixta"}
+                                  onChange={(event) =>
+                                    setEditPaellasState((prev) => {
+                                      const base = prev[paella.id] ?? initialState();
+                                      return {
+                                        ...prev,
+                                        [paella.id]: {
+                                          ...base,
+                                          rice_type: event.target.value
+                                        }
+                                      };
+                                    })
+                                  }
+                                  className="w-full rounded-md border border-slate-200 px-3 py-2"
+                                >
+                                  <option value="Mixta">Mixta</option>
+                                  <option value="Marisco">Marisco</option>
+                                  <option value="Carne">Carne</option>
+                                  <option value="Vegetal">Vegetal</option>
+                                </select>
+                              </label>
+                              <label className="space-y-1">
+                                <span className="text-xs font-semibold uppercase text-slate-600">Estado</span>
+                                <span className="block rounded-md border border-dashed border-slate-200 px-3 py-2 text-sm">
+                                  {paella.status}
+                                </span>
+                              </label>
+                              <label className="space-y-1">
+                                <span className="text-xs font-semibold uppercase text-slate-600">Fianza (€)</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={currentState.deposit}
+                                  onChange={(event) =>
+                                    setEditPaellasState((prev) => {
+                                      const base = prev[paella.id] ?? initialState();
+                                      return {
+                                        ...prev,
+                                        [paella.id]: {
+                                          ...base,
+                                          deposit: event.target.value
+                                        }
+                                      };
+                                    })
+                                  }
+                                  className="w-full rounded-md border border-slate-200 px-3 py-2"
+                                  placeholder="10"
+                                />
+                              </label>
+                              <label className="space-y-1">
+                                <span className="text-xs font-semibold uppercase text-slate-600">Precio (€)</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={currentState.price}
+                                  onChange={(event) =>
+                                    setEditPaellasState((prev) => {
+                                      const base = prev[paella.id] ?? initialState();
+                                      return {
+                                        ...prev,
+                                        [paella.id]: {
+                                          ...base,
+                                          price: event.target.value
+                                        }
+                                      };
+                                    })
+                                  }
+                                  className="w-full rounded-md border border-slate-200 px-3 py-2"
+                                  placeholder="Precio final"
+                                />
+                              </label>
+                              <label className="md:col-span-3 space-y-1">
+                                <span className="text-xs font-semibold uppercase text-slate-600">Notas</span>
+                                <textarea
+                                  value={currentState.notes}
+                                  onChange={(event) =>
+                                    setEditPaellasState((prev) => {
+                                      const base = prev[paella.id] ?? initialState();
+                                      return {
+                                        ...prev,
+                                        [paella.id]: {
+                                          ...base,
+                                          notes: event.target.value
+                                        }
+                                      };
+                                    })
+                                  }
+                                  className="w-full rounded-md border border-slate-200 px-3 py-2"
+                                  rows={2}
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {editingError ? <p className="text-sm text-red-600">{editingError}</p> : null}
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={() => handleSaveClient(client)}
+                        disabled={savingClient}
+                        className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+                      >
+                        {savingClient ? "Guardando..." : "Guardar cambios"}
+                      </button>
+                      <button
+                        onClick={cancelEditingClient}
+                        type="button"
+                        className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-2 text-sm text-slate-600">
+                    {client.paellas.length === 0 ? (
+                      <p>No hay paellas registradas todavía.</p>
+                    ) : (
+                      client.paellas.map((paella) => {
+                        const parsed = parsePaellaNotes(paella.notes);
+                        const depositDisplay =
+                          parsed.deposit !== null ? parsed.deposit : DEFAULT_DEPOSIT;
+                        const priceDisplay =
+                          parsed.price !== null
+                            ? `${parsed.price.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+                            : "Sin precio asignado";
+                        return (
+                          <div
+                            key={paella.id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-100 p-3"
+                          >
+                            <div className="space-y-1">
+                              <p className="font-medium text-slate-800">
+                                {paella.servings} raciones · {paella.rice_type ?? "Mixta"}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                Estado: {paella.status} · Fianza: {depositDisplay} € · {priceDisplay}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {parsed.notesText ? parsed.notesText : "Sin notas"}
+                              </p>
+                            </div>
+                            {isAdmin ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                {(["pendiente", "cocinando", "lista", "entregada", "devuelta"] as const).map(
+                                  (statusOption) => (
+                                    <button
+                                      key={statusOption}
+                                      onClick={() => handleUpdatePaellaStatus(paella.id, statusOption)}
+                                      className={clsx(
+                                        "rounded-full px-3 py-1 text-xs capitalize transition",
+                                        PAELLA_STATUS_BADGE[statusOption],
+                                        paella.status === statusOption
+                                          ? "ring-2 ring-brand/60"
+                                          : "opacity-70 hover:opacity-100"
+                                      )}
+                                    >
+                                      {statusOption}
+                                    </button>
+                                  )
+                                )}
+                              </div>
+                            ) : (
+                              <span
                                 className={clsx(
-                                  "rounded-full px-3 py-1 text-xs capitalize transition",
-                                  PAELLA_STATUS_BADGE[statusOption],
-                                  paella.status === statusOption
-                                    ? "ring-2 ring-brand/60"
-                                    : "opacity-70 hover:opacity-100"
+                                  "rounded-full px-3 py-1 text-xs capitalize",
+                                  PAELLA_STATUS_BADGE[paella.status]
                                 )}
                               >
-                                {statusOption}
-                              </button>
-                            )
-                          )}
-                        </div>
-                      ) : (
-                        <span
-                          className={clsx(
-                            "rounded-full px-3 py-1 text-xs capitalize",
-                            PAELLA_STATUS_BADGE[paella.status]
-                          )}
+                                {paella.status}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+
+                <footer className="mt-4 space-y-3">
+                  {isAdmin ? (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={() => handleUpdateClientStatus(client.id, "devuelto")}
+                        className="rounded-md border border-rose-300 px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                      >
+                        Devuelto
+                      </button>
+                      <button
+                        onClick={() => handleUpdateClientStatus(client.id, "entregado")}
+                        className="rounded-md border border-emerald-300 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                      >
+                        Ticket
+                      </button>
+                      <button
+                        onClick={() => startEditingClient(client)}
+                        className="rounded-md border border-sky-300 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClient(client.id)}
+                        className="rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                      >
+                        Eliminar
+                      </button>
+                      {client.status !== "pendiente" ? (
+                        <button
+                          onClick={() => handleUpdateClientStatus(client.id, "pendiente")}
+                          className="ml-auto rounded-md border border-yellow-300 px-3 py-1 text-xs font-medium text-yellow-700 hover:bg-yellow-50"
                         >
-                          {paella.status}
-                        </span>
-                      )}
+                          Volver a pendiente
+                        </button>
+                      ) : null}
                     </div>
-                  ))
-                )}
-              </div>
-              <footer className="mt-4 flex flex-wrap items-center gap-3">
-                {isAdmin ? (
-                  <>
-                    <button
-                      onClick={() => handleUpdateClientStatus(client.id, "pendiente")}
-                      className="rounded-md border border-yellow-300 px-3 py-1 text-xs font-medium text-yellow-700"
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      Los cambios de estado solo están disponibles para administradores.
+                    </p>
+                  )}
+
+                  {addingPaellaForClient === client.id ? (
+                    <form
+                      onSubmit={(event) => handleAddPaella(event, client)}
+                      className="space-y-3 rounded-md border border-dashed border-slate-300 p-3"
                     >
-                      Pendiente
-                    </button>
+                      <h5 className="text-sm font-semibold text-slate-700">Añadir nueva paella</h5>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <label className="space-y-1">
+                          <span className="text-xs font-semibold uppercase text-slate-600">Raciones</span>
+                          <input
+                            type="number"
+                            min={2}
+                            value={addPaellaState.servings}
+                            onChange={(event) =>
+                              setAddPaellaState((prev) => ({ ...prev, servings: Number(event.target.value) }))
+                            }
+                            className="w-full rounded-md border border-slate-200 px-3 py-2"
+                          />
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-xs font-semibold uppercase text-slate-600">Tipo</span>
+                          <select
+                            value={addPaellaState.rice_type}
+                            onChange={(event) =>
+                              setAddPaellaState((prev) => ({ ...prev, rice_type: event.target.value }))
+                            }
+                            className="w-full rounded-md border border-slate-200 px-3 py-2"
+                          >
+                            <option>Mixta</option>
+                            <option>Marisco</option>
+                            <option>Carne</option>
+                            <option>Vegetal</option>
+                          </select>
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-xs font-semibold uppercase text-slate-600">Fianza (€)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={addPaellaState.deposit}
+                            onChange={(event) =>
+                              setAddPaellaState((prev) => ({ ...prev, deposit: event.target.value }))
+                            }
+                            className="w-full rounded-md border border-slate-200 px-3 py-2"
+                          />
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-xs font-semibold uppercase text-slate-600">Precio (€)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={addPaellaState.price}
+                            onChange={(event) =>
+                              setAddPaellaState((prev) => ({ ...prev, price: event.target.value }))
+                            }
+                            className="w-full rounded-md border border-slate-200 px-3 py-2"
+                          />
+                        </label>
+                        <label className="md:col-span-3 space-y-1">
+                          <span className="text-xs font-semibold uppercase text-slate-600">Notas</span>
+                          <textarea
+                            value={addPaellaState.notes}
+                            onChange={(event) =>
+                              setAddPaellaState((prev) => ({ ...prev, notes: event.target.value }))
+                            }
+                            className="w-full rounded-md border border-slate-200 px-3 py-2"
+                            rows={2}
+                          />
+                        </label>
+                      </div>
+                      {addPaellaError ? <p className="text-sm text-red-600">{addPaellaError}</p> : null}
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="submit"
+                          disabled={addingPaella}
+                          className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+                        >
+                          {addingPaella ? "Guardando..." : "Guardar paella"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAddingPaellaForClient(null)}
+                          className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
                     <button
-                      onClick={() => handleUpdateClientStatus(client.id, "entregado")}
-                      className="rounded-md border border-emerald-300 px-3 py-1 text-xs font-medium text-emerald-700"
+                      onClick={() => openAddPaellaForm(client.id)}
+                      className="flex items-center gap-2 text-sm font-medium text-brand hover:underline"
                     >
-                      Ticket
+                      + Añadir otra paella
                     </button>
-                    <button
-                      onClick={() => handleUpdateClientStatus(client.id, "devuelto")}
-                      className="rounded-md border border-rose-300 px-3 py-1 text-xs font-medium text-rose-700"
-                    >
-                      Devuelta
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClient(client.id)}
-                      className="ml-auto rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
-                    >
-                      Eliminar
-                    </button>
-                  </>
-                ) : (
-                  <p className="text-xs text-slate-500">
-                    Los cambios de estado solo están disponibles para administradores.
-                  </p>
-                )}
-              </footer>
-            </article>
-          ))}
+                  )}
+                </footer>
+              </article>
+            );
+          })}
           {filteredClients.length === 0 ? (
             <p className="rounded-md border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
               No se encontraron clientes para la búsqueda actual.
