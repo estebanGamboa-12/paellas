@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { AuthProvider } from "@/app/components/AuthProvider";
-import { Dashboard, type ClientWithPaellas } from "@/app/components/Dashboard";
+import { AuthProvider } from "@/components/AuthProvider";
+import { Dashboard, type ClientWithPaellas } from "@/components/Dashboard";
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
 
 export default async function DashboardPage() {
