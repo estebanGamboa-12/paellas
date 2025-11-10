@@ -6,6 +6,14 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 
+type PaellaForm = {
+  id?: string;
+  servings: string;
+  rice_type: string;
+  hasDeposit: boolean;
+  deposit: string;
+};
+
 export default function EditClientPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const clientId = params.id;
@@ -18,59 +26,59 @@ export default function EditClientPage({ params }: { params: { id: string } }) {
     phone: "",
   });
 
-  const [paellas, setPaellas] = useState<
-    { id?: string; servings: number; rice_type: string; hasDeposit: boolean; deposit: number | null }[]
-  >([]);
+  const [paellas, setPaellas] = useState<PaellaForm[]>([]);
 
-  function updatePaella<T extends keyof typeof paellas[0]>(index: number, key: T, value: typeof paellas[0][T]) {
-    const copy = [...paellas];
-    copy[index] = { ...copy[index], [key]: value };
-    setPaellas(copy);
-  }
-
-
-  async function load() {
-    const { data: clientData } = await supabase
-      .from("clients")
-      .select("first_name, last_name, phone")
-      .eq("id", clientId)
-      .single();
-
-    const { data: paellasData } = await supabase
-      .from("paellas")
-      .select("id, servings, rice_type, notes")
-      .eq("client_id", clientId);
-
-    setClient(clientData ?? {
-      first_name: "",
-      last_name: "",
-      phone: "",
+  function updatePaella<T extends keyof PaellaForm>(index: number, key: T, value: PaellaForm[T]) {
+    setPaellas((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [key]: value };
+      return copy;
     });
-
-    const formatted = paellasData?.map((p) => {
-      let deposit = null;
-      try {
-        const n = JSON.parse(p.notes ?? "{}");
-        deposit = n.deposit ?? null;
-      } catch (_) { }
-
-      return {
-        id: p.id,
-        servings: p.servings,
-        rice_type: p.rice_type,
-        hasDeposit: deposit !== null,
-        deposit: deposit,
-      };
-    }) || [];
-
-    setPaellas(formatted);
-
-    setLoading(false);
   }
+
 
   useEffect(() => {
+    async function load() {
+      const { data: clientData } = await supabase
+        .from("clients")
+        .select("first_name, last_name, phone")
+        .eq("id", clientId)
+        .single();
+
+      const { data: paellasData } = await supabase
+        .from("paellas")
+        .select("id, servings, rice_type, notes")
+        .eq("client_id", clientId);
+
+      setClient(clientData ?? {
+        first_name: "",
+        last_name: "",
+        phone: "",
+      });
+
+      const formatted: PaellaForm[] = paellasData?.map((p) => {
+        let deposit: number | null = null;
+        try {
+          const n = JSON.parse(p.notes ?? "{}");
+          deposit = n.deposit ?? null;
+        } catch (_) { }
+
+        return {
+          id: p.id,
+          servings: String(p.servings ?? ""),
+          rice_type: p.rice_type,
+          hasDeposit: deposit !== null,
+          deposit: deposit !== null ? String(deposit) : "",
+        };
+      }) || [];
+
+      setPaellas(formatted);
+
+      setLoading(false);
+    }
+
     load();
-  }, []);
+  }, [clientId]);
 
   async function save(e: any) {
     e.preventDefault();
@@ -87,10 +95,10 @@ export default function EditClientPage({ params }: { params: { id: string } }) {
     for (const p of paellas) {
       await supabase.from("paellas")
         .update({
-          servings: p.servings,
+          servings: Number(p.servings),
           rice_type: p.rice_type,
           notes: JSON.stringify({
-            deposit: p.hasDeposit ? Number(p.deposit) : null,
+            deposit: p.hasDeposit ? Number(p.deposit || 0) : null,
           })
         })
         .eq("id", p.id);
@@ -100,7 +108,7 @@ export default function EditClientPage({ params }: { params: { id: string } }) {
   }
 
   const totalDeposit = paellas.reduce(
-    (sum, p) => sum + (p.hasDeposit ? Number(p.deposit) : 0),
+    (sum, p) => sum + (p.hasDeposit ? Number(p.deposit || 0) : 0),
     0
   );
 
@@ -152,9 +160,14 @@ export default function EditClientPage({ params }: { params: { id: string } }) {
               <input
                 type="number"
                 min={2}
+                required
                 className="w-full border rounded-lg px-3 py-2"
                 value={p.servings}
-                onChange={(e) => updatePaella(i, "servings", Number(e.target.value))}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const sanitized = raw === "" ? "" : raw.replace(/^0+(?=\d)/, "");
+                  updatePaella(i, "servings", sanitized);
+                }}
               />
             </div>
 
@@ -191,8 +204,12 @@ export default function EditClientPage({ params }: { params: { id: string } }) {
                   type="number"
                   min={0}
                   className="w-full border rounded-lg px-3 py-2"
-                  value={p.deposit ?? ""}
-                  onChange={(e) => updatePaella(i, "deposit", Number(e.target.value))}
+                  value={p.deposit}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const sanitized = raw === "" ? "" : raw.replace(/^0+(?=\d)/, "");
+                    updatePaella(i, "deposit", sanitized);
+                  }}
                 />
               </div>
             )}
