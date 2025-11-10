@@ -202,10 +202,10 @@ export default function Dashboard() {
                   🗑 Eliminar
                 </button>
 
-                {/* ✅ TICKET */}
+                {/* ✅ TICKET
                 <button onClick={() => handlePrint(client)} className="text-blue-600 hover:underline">
                   🧾 Ticket
-                </button>
+                </button> */}
               </div>
             </div>
           );
