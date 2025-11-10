@@ -6,6 +6,13 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 
+type PaellaForm = {
+  servings: string;
+  rice_type: string;
+  hasDeposit: boolean;
+  deposit: string;
+};
+
 export default function CreatePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -16,23 +23,31 @@ export default function CreatePage() {
     phone: "",
   });
 
-  const [paellas, setPaellas] = useState([
-    { servings: 2, rice_type: "Mixta", hasDeposit: true, deposit: 10 }
+  const [paellas, setPaellas] = useState<PaellaForm[]>([
+    { servings: "2", rice_type: "Mixta", hasDeposit: true, deposit: "10" }
   ]);
 
- function updatePaella<T extends keyof typeof paellas[0]>(index: number, key: T, value: typeof paellas[0][T]) {
-  const copy = [...paellas];
-  copy[index] = { ...copy[index], [key]: value };
-  setPaellas(copy);
-}
-
+  function updatePaella<T extends keyof PaellaForm>(
+    index: number,
+    key: T,
+    value: PaellaForm[T]
+  ) {
+    setPaellas((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [key]: value };
+      return copy;
+    });
+  }
 
   function addPaella() {
-    setPaellas([...paellas, { servings: 2, rice_type: "Mixta", hasDeposit: true, deposit: 10 }]);
+    setPaellas((prev) => [
+      ...prev,
+      { servings: "2", rice_type: "Mixta", hasDeposit: true, deposit: "10" }
+    ]);
   }
 
   const totalDeposit = paellas.reduce(
-    (sum, p) => sum + (p.hasDeposit ? Number(p.deposit) : 0),
+    (sum, p) => sum + (p.hasDeposit ? Number(p.deposit || 0) : 0),
     0
   );
 
@@ -61,11 +76,11 @@ export default function CreatePage() {
     // 2) Crear paellas vinculadas
     const formattedPaellas = paellas.map((p) => ({
       client_id: newClient.id,
-      servings: p.servings,
+      servings: Number(p.servings),
       rice_type: p.rice_type,
       status: "pendiente",
       notes: JSON.stringify({
-        deposit: p.hasDeposit ? Number(p.deposit) : null,
+        deposit: p.hasDeposit ? Number(p.deposit || 0) : null,
       })
     }));
 
@@ -123,9 +138,14 @@ export default function CreatePage() {
               <input
                 type="number"
                 min={2}
+                required
                 className="w-full border rounded-lg px-3 py-2"
                 value={p.servings}
-                onChange={(e) => updatePaella(i, "servings", Number(e.target.value))}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const sanitized = raw === "" ? "" : raw.replace(/^0+(?=\d)/, "");
+                  updatePaella(i, "servings", sanitized);
+                }}
               />
             </div>
 
@@ -163,7 +183,11 @@ export default function CreatePage() {
                   min={0}
                   className="w-full border rounded-lg px-3 py-2"
                   value={p.deposit}
-                  onChange={(e) => updatePaella(i, "deposit", Number(e.target.value))}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const sanitized = raw === "" ? "" : raw.replace(/^0+(?=\d)/, "");
+                    updatePaella(i, "deposit", sanitized);
+                  }}
                 />
               </div>
             )}
